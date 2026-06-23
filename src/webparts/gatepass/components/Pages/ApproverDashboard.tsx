@@ -25,7 +25,6 @@ const ApproverDashboard: React.FC<IGatepassProps> = (props) => {
     return requests
       .filter(
         (item) =>
-          item.Status === "Pending For Approver" &&
           item.CurrentApprover?.Id === currentUserId
       )
       .sort((a, b) => b.Id - a.Id);

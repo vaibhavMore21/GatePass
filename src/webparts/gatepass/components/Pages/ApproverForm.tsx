@@ -379,12 +379,26 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       <h3 className="section-title">Approver Form</h3>
       <div className="approval-ribbon">
         <div className="ribbon-step initiator">{"Initiator"}</div>
+        {approverDetails.map((step, index) => {
 
-        {approverDetails.map((approver, index) => (
+          let className = "waiting";
+
+          if (step.Status === "initiator") className = "initiator";
+          if (step.Status === "Approved") className = "approved";
+          if (step.Status === "current") className = "current";
+
+          return (
+            <div key={index} className={`ribbon-step ${className}`}>
+              {step.Name}
+            </div>
+          );
+
+        })}
+        {/* {approverDetails.map((approver, index) => (
           <div key={index} className="ribbon-step approver">
             {approver.Name}
           </div>
-        ))}
+        ))} */}
       </div>
       <div className="new-request">
         <h3 className="page-title">Request Details</h3>

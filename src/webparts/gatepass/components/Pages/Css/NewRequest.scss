@@ -244,13 +244,13 @@ textarea{
 }
 
 /* Current */
-.ribbon-step.current {
+.ribbon-step.pending {
   background: #ffc107;
   color: black;
 }
 
 /* Pending */
-.ribbon-step.pending {
+.ribbon-step.waiting {
   background: #bdbdbd;
 }
 
