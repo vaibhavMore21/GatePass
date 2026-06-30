@@ -21,7 +21,10 @@ interface IApproverDetails {
 }
 const NewRequest: React.FC<IGatepassProps> = (props) => {
   const [approverMatrix, setApproverMatrix] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
+  // const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSubmitLoading, setIsSubmitLoading] = useState(false);
+const [isDraftLoading, setIsDraftLoading] = useState(false);
 
   const [header, setHeader] = useState({
     EmployeeName: "",
@@ -146,7 +149,7 @@ const NewRequest: React.FC<IGatepassProps> = (props) => {
   const [selectedVendor, setSelectedVendor] = useState("");
   const [locations, setLocations] = useState<any[]>([]);
   const [selectedLocation, setSelectedLocation] = useState("");
-  const [noOfItems, setNoOfItems] = useState("");
+  const [noOfItems, setNoOfItems] = useState("1");
   const [itemsPerBox, setItemsPerBox] = useState("");
   const [uom, setUom] = useState("");
   const [returnable, setReturnable] = useState("");
@@ -297,7 +300,7 @@ const getFinalApproverMatrix = () => {
   };
 
   const handleSubmit = async () => {
-    if (isSubmitting) return;
+    if (isSubmitLoading) return;
     try {
       if (!selectedVendor) {
         alert("Please select Vendor");
@@ -361,6 +364,10 @@ const getFinalApproverMatrix = () => {
           return;
         }
       }
+      if (!supportingFiles || supportingFiles.length === 0) {
+  alert("Please attach supporting document");
+  return;
+}
 
       const workflowHistory = [
         buildWorkflowHistory("Pending For Approver", remarks),
@@ -375,7 +382,7 @@ const getFinalApproverMatrix = () => {
       //   return;
       // }
 
-      setIsSubmitting(true);
+      setIsSubmitLoading(true);
 
       //const firstApprover = finalMatrix.find(a => a.Level === 1);
       const gatePassService = GatePass();
@@ -407,6 +414,48 @@ const getFinalApproverMatrix = () => {
       const response = await gatePassService.saveRequest(payload, props);
       const gatePassId = response.data.Id;
 
+if (supportingFiles.length > 0) {
+  const sp = await SPCRUDOPS();
+  const folderUrl = "/sites/NBCGatePass/SupportingDocs";
+
+  for (const file of supportingFiles) {
+
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, "-");
+
+  
+    const dotIndex = file.name.lastIndexOf(".");
+    const baseName = dotIndex !== -1 ? file.name.substring(0, dotIndex) : file.name;
+    const extension = dotIndex !== -1 ? file.name.substring(dotIndex) : "";
+
+  
+    const newFileName = `${baseName}_${timestamp}${extension}`;
+
+
+    const renamedFile = new File([file], newFileName, { type: file.type });
+
+    const uploadRes = await sp.uploadFile(folderUrl, renamedFile, props);
+
+    const fileItem = uploadRes.file;
+    const item = await fileItem.getItem();
+
+    const itemId = item.Id;
+
+    if (!itemId) {
+      throw new Error("File uploaded but List Item ID not found");
+    }
+
+    await sp.updateData(
+      "SupportingDocs",
+      itemId,
+      {
+        GatePassID: String(gatePassId)
+      },
+      props
+    );
+  }
+}
+
       for (const item of items) {
         const childPayload = {
           Title: "Item",
@@ -429,12 +478,12 @@ const getFinalApproverMatrix = () => {
       console.error(err);
       alert("Error submitting request");
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitLoading(false);
     }
   };
 
   const handleSaveDraft = async () => {
-    if (isSubmitting) return;
+    if (isDraftLoading) return;
     try {
       // if (!selectedVendor) {
       //   alert("Please select Vendor");
@@ -471,7 +520,7 @@ const getFinalApproverMatrix = () => {
       //   return;
       // }
 
-      setIsSubmitting(true);
+     setIsDraftLoading(true);
 
       const gatePassService = GatePass();
       const childService = AuthorisedSignatories();
@@ -504,6 +553,44 @@ const getFinalApproverMatrix = () => {
 
       const gatePassId = response.data.Id;
 
+if (supportingFiles && supportingFiles.length > 0) {
+  const sp = await SPCRUDOPS();
+  const folderUrl = "/sites/NBCGatePass/SupportingDocs";
+
+  for (const file of supportingFiles) {
+
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, "-");
+
+    const dotIndex = file.name.lastIndexOf(".");
+    const baseName = dotIndex !== -1 ? file.name.substring(0, dotIndex) : file.name;
+    const extension = dotIndex !== -1 ? file.name.substring(dotIndex) : "";
+
+    const newFileName = `${baseName}_${timestamp}${extension}`;
+
+    const renamedFile = new File([file], newFileName, { type: file.type });
+
+    const uploadRes = await sp.uploadFile(folderUrl, renamedFile, props);
+
+    const fileItem = uploadRes.file;
+    const item = await fileItem.getItem();
+    const itemId = item.Id;
+
+    if (!itemId) {
+      throw new Error("File uploaded but List Item ID not found");
+    }
+
+    await sp.updateData(
+      "SupportingDocs",
+      itemId,
+      {
+        GatePassID: String(gatePassId)
+      },
+      props
+    );
+  }
+}
+
       // Save Child Rows
       for (const item of items) {
         const childPayload = {
@@ -528,7 +615,7 @@ const getFinalApproverMatrix = () => {
       console.error(err);
       alert("Error submitting request");
     } finally {
-      setIsSubmitting(false);
+     setIsDraftLoading(false);
     }
   };
   useEffect(() => {
@@ -555,8 +642,8 @@ const getFinalApproverMatrix = () => {
     <div className="new-request">
       <h3 className="page-title">New Request Form</h3>
       <div className="approval-ribbon">
-        <div className="ribbon-step initiator">{"Initiator"}</div>
-
+        <div className="ribbon-step approved">{"Initiator"}</div>
+{/* initiator */}
         {approverDetails.map((approver, index) => (
           <div key={index} className="ribbon-step approver">
             {approver.Name}
@@ -836,24 +923,39 @@ const getFinalApproverMatrix = () => {
           />
         </div>
 
-        <div className="attach">Attach Supporting Documents </div>
+        {/* <div className="attach">Attach Supporting Documents </div> */}
+        <div className="attach">
+  <label>Attach Supporting Documents</label>
+
+  <input
+    type="file"
+    multiple
+    onChange={(e) => {
+      if (e.target.files) {
+        setSupportingFiles(Array.from(e.target.files));
+      }
+    }}
+  />
+</div>
+       
       </div>
 
       <div className="buttons">
         <button
           className="draft"
           onClick={handleSaveDraft}
-          disabled={isSubmitting}
+          disabled={isDraftLoading}
+        
         >
-          {isSubmitting ? "Saving..." : "Save as Draft"}
+          {isDraftLoading ? "Saving..." : "Save as Draft"}
         </button>
 
         <button
           className="submit"
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitLoading}
         >
-          {isSubmitting ? "Saving..." : "Submit"}
+          {isSubmitLoading ? "Saving..." : "Submit"}
         </button>
 
         <button

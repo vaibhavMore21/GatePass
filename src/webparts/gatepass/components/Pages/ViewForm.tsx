@@ -4,6 +4,7 @@ import GatePass from "../../service/BAL/GatePass";
 import AuthorisedSignatories from "../../service/BAL/AuthorisedSignatories";
 import type { IGatepassProps } from "../IGatepassProps";
 import "../Pages/Css/NewRequest.scss";
+import SPCRUDOPS from "../../service/DAL/spcrudops";
 
 interface IApproverDetails {
   Id: number;
@@ -21,6 +22,8 @@ const ViewForm: React.FC<IGatepassProps> = (props) => {
 
   const [request, setRequest] = React.useState<any>(null);
   const [items, setItems] = React.useState<any[]>([]);
+  const [uploadedFiles, setUploadedFiles] = React.useState<any[]>([]);
+  
   const [approverDetails, setApproverDetails] = React.useState<IApproverDetails[]>([]);
 
   const loadData = async () => {
@@ -57,6 +60,21 @@ const ViewForm: React.FC<IGatepassProps> = (props) => {
         setWorkflow([]);
       }
 
+            const sp = await SPCRUDOPS();
+      
+            const docs = await sp.getData(
+              "SupportingDocs",
+              "Id,FileLeafRef,FileRef,GatePassID",
+              "",
+              `GatePassID eq '${id}'`,
+              { column: "Id", isAscending: false },
+              props,
+            );
+      
+            console.log("Supporting Docs:", docs);
+      
+            setUploadedFiles(Array.isArray(docs) ? docs : []);
+
     } catch (err) {
       console.error(err);
     }
@@ -71,7 +89,7 @@ const ViewForm: React.FC<IGatepassProps> = (props) => {
       <h3 className="section-title">View Form</h3>
 
       <div className="approval-ribbon">
-        <div className="ribbon-step initiator">{"Initiator"}</div>
+        <div className="ribbon-step approved">{"Initiator"}</div>
 
         {approverDetails.map((approver, index) => (
           <div key={index} className="ribbon-step approver">
@@ -195,9 +213,23 @@ const ViewForm: React.FC<IGatepassProps> = (props) => {
           </tbody>
         </table>
 
-        <div className="attach">
-          Attach Supporting Documents &nbsp;&nbsp;
-          <a>View</a>
+        <div className="authorized">
+          Attach Supporting Documents
+          {uploadedFiles.length === 0 ? (
+            <span>No attachments</span>
+          ) : (
+            uploadedFiles.map((file) => (
+              <div key={file.Id}>
+                <a
+                  href={`${file.FileRef}?web=1`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {file.FileLeafRef}
+                </a>
+              </div>
+            ))
+          )}
         </div>
         <br></br>
 

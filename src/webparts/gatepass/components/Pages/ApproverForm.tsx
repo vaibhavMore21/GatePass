@@ -24,7 +24,10 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
   const [workflow, setWorkflow] = React.useState<any[]>([]);
   const [isSaving, setIsSaving] = React.useState(false);
   const [remarks, setRemarks] = React.useState("");
-  const [approverDetails, setApproverDetails] = React.useState<IApproverDetails[]>([]);
+  const [uploadedFiles, setUploadedFiles] = React.useState<any[]>([]);
+  const [approverDetails, setApproverDetails] = React.useState<
+    IApproverDetails[]
+  >([]);
 
   // const loadRequestById = async (id: number) => {
   //   try {
@@ -48,7 +51,6 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
   //     const record = res?.[0];
 
   //     setRequest(record);
-
 
   //     if (record?.WFH) {
   //       try {
@@ -79,13 +81,18 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       const record = res?.[0];
       setRequest(record);
 
-      const authItems = await authService.getAuthorisedByGatePassId(Number(id), props);
+      const authItems = await authService.getAuthorisedByGatePassId(
+        Number(id),
+        props,
+      );
       setItems(authItems);
 
       if (record?.ApproverMatrics) {
         try {
           const parseddata = JSON.parse(record?.ApproverMatrics);
-          setApproverDetails(Array.isArray(parseddata) ? parseddata : [parseddata])
+          setApproverDetails(
+            Array.isArray(parseddata) ? parseddata : [parseddata],
+          );
         } catch (e) {
           console.error("ApproverMatrix parse error:", e);
           setApproverDetails([]);
@@ -102,7 +109,20 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       } else {
         setWorkflow([]);
       }
+      const sp = await SPCRUDOPS();
 
+      const docs = await sp.getData(
+        "SupportingDocs",
+        "Id,FileLeafRef,FileRef,GatePassID",
+        "",
+        `GatePassID eq '${id}'`,
+        { column: "Id", isAscending: false },
+        props,
+      );
+
+      console.log("Supporting Docs:", docs);
+
+      setUploadedFiles(Array.isArray(docs) ? docs : []);
     } catch (err) {
       console.error(err);
     }
@@ -136,15 +156,11 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       let matrix = [...approverDetails];
 
       // Current pending approver before approval
-      const oldPending = matrix.find(
-        x => x.Status === "Pending"
-      );
+      const oldPending = matrix.find((x) => x.Status === "Pending");
 
       // Mark current approver as Approved
       const currentIndex = matrix.findIndex(
-        x =>
-          Number(x.Id) === Number(currentUserId) &&
-          x.Status === "Pending"
+        (x) => Number(x.Id) === Number(currentUserId) && x.Status === "Pending",
       );
 
       if (currentIndex !== -1) {
@@ -163,7 +179,7 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
         "CurrentApprover",
         "Status eq 'Active'",
         { column: "ID", isAscending: true },
-        props
+        props,
       );
 
       // Convert SharePoint data to same format
@@ -173,7 +189,7 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
         Name: x.CurrentApprover?.Title,
         Role: x.Role,
         Level: x.Level,
-        Status: "Waiting"
+        Status: "Waiting",
       }));
 
       // --------------------------------------------------
@@ -181,49 +197,41 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       // KEEP OLD ROLES IF REMOVED FROM MASTER
       // --------------------------------------------------
 
-      matrix = matrix.map(oldItem => {
-
+      matrix = matrix.map((oldItem) => {
         const latestItem = latestMatrix.find(
-          x => String(x.Role) === String(oldItem.Role)
+          (x) => String(x.Role) === String(oldItem.Role),
         );
 
         if (latestItem) {
-
           return {
             ...oldItem,
             Id: latestItem.Id,
             Name: latestItem.Name,
-            Level: latestItem.Level
+            Level: latestItem.Level,
           };
-
         }
 
         // Role removed from master matrix
         // Keep old record and status
 
         return oldItem;
-
       });
 
       // --------------------------------------------------
       // ADD NEW ROLES ADDED IN MASTER MATRIX
       // --------------------------------------------------
 
-      latestMatrix.forEach(latestItem => {
-
+      latestMatrix.forEach((latestItem) => {
         const exists = matrix.some(
-          x => String(x.Role) === String(latestItem.Role)
+          (x) => String(x.Role) === String(latestItem.Role),
         );
 
         if (!exists) {
-
           matrix.push({
             ...latestItem,
-            Status: "Waiting"
+            Status: "Waiting",
           });
-
         }
-
       });
 
       // --------------------------------------------------
@@ -231,57 +239,40 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
       // --------------------------------------------------
 
       if (oldPending) {
-
         const roleExists = matrix.some(
-          x =>
-            String(x.Role) === String(oldPending.Role)
+          (x) => String(x.Role) === String(oldPending.Role),
         );
 
         if (!roleExists) {
-
-          const nextWaiting = matrix.find(
-            x => x.Status === "Waiting"
-          );
+          const nextWaiting = matrix.find((x) => x.Status === "Waiting");
 
           if (nextWaiting) {
             nextWaiting.Status = "Pending";
           }
-
         }
-
       }
 
       // --------------------------------------------------
       // FIND NEXT APPROVER
       // --------------------------------------------------
 
-      let nextApprover = matrix.find(
-        x => x.Status === "Pending"
-      );
+      let nextApprover = matrix.find((x) => x.Status === "Pending");
 
       if (!nextApprover) {
-
-        const nextWaiting = matrix.find(
-          x => x.Status === "Waiting"
-        );
+        const nextWaiting = matrix.find((x) => x.Status === "Waiting");
 
         if (nextWaiting) {
-
           nextWaiting.Status = "Pending";
           nextApprover = nextWaiting;
-
         }
-
       }
 
       let newStatus = "Approved";
       let nextApproverId: number | null = null;
 
       if (nextApprover) {
-
         newStatus = `Pending For ${nextApprover.Role} Approval`;
         nextApproverId = nextApprover.Id;
-
       }
 
       console.log("Old Matrix", approverDetails);
@@ -296,20 +287,23 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
           ActionTaken: "Approved",
           Comment: remarks,
           Date: new Date().toISOString(),
-          CurrentStatus: newStatus
-        }
+          CurrentStatus: newStatus,
+        },
       ];
 
-      await gateService.updateRequest(request.Id, {
-        Status: newStatus,
-        CurrentApproverId: nextApproverId,
-        WFH: JSON.stringify(updatedWorkflow),
-        ApproverMatrics: JSON.stringify(matrix)
-      }, props);
+      await gateService.updateRequest(
+        request.Id,
+        {
+          Status: newStatus,
+          CurrentApproverId: nextApproverId,
+          WFH: JSON.stringify(updatedWorkflow),
+          ApproverMatrics: JSON.stringify(matrix),
+        },
+        props,
+      );
 
-      alert("Approved succe ssfully");
+      alert("Request Approved successfully");
       history.push("/ApproverDashboard");
-
     } catch (err) {
       console.error(err);
     } finally {
@@ -317,6 +311,11 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
     }
   };
   const handleSendBack = async () => {
+    if (isSaving) return;
+    if (!remarks || remarks.trim() === "") {
+      alert("Remarks are mandatory for Send Back");
+      return;
+    }
     try {
       setIsSaving(true);
 
@@ -329,18 +328,21 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
           ActionTaken: "Sent Back",
           Comment: remarks,
           Date: new Date().toISOString(),
-          CurrentStatus: "Sent Back"
-        }
+          CurrentStatus: "Sent Back",
+        },
       ];
 
-      await gateService.updateRequest(request.Id, {
-        Status: "Sent Back",
-        WFH: JSON.stringify(updatedWorkflow)
-      }, props);
+      await gateService.updateRequest(
+        request.Id,
+        {
+          Status: "Sent Back",
+          WFH: JSON.stringify(updatedWorkflow),
+        },
+        props,
+      );
 
       alert("Sent back successfully");
       history.push("/ApproverDashboard");
-
     } catch (err) {
       console.error(err);
     } finally {
@@ -357,14 +359,18 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
         ActionTaken: "Rejected",
         Comment: remarks,
         Date: new Date().toISOString(),
-        CurrentStatus: "Rejected"
-      }
+        CurrentStatus: "Rejected",
+      },
     ];
 
-    await gateService.updateRequest(request.Id, {
-      Status: "Rejected",
-      WFH: JSON.stringify(updatedWorkflow)
-    }, props);
+    await gateService.updateRequest(
+      request.Id,
+      {
+        Status: "Rejected",
+        WFH: JSON.stringify(updatedWorkflow),
+      },
+      props,
+    );
 
     alert("Rejected");
     history.push("/ApproverDashboard");
@@ -378,9 +384,8 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
     <>
       <h3 className="section-title">Approver Form</h3>
       <div className="approval-ribbon">
-        <div className="ribbon-step initiator">{"Initiator"}</div>
+        <div className="ribbon-step approved">{"Initiator"}</div>
         {approverDetails.map((step, index) => {
-
           let className = "waiting";
 
           if (step.Status === "initiator") className = "initiator";
@@ -392,7 +397,6 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
               {step.Name}
             </div>
           );
-
         })}
         {/* {approverDetails.map((approver, index) => (
           <div key={index} className="ribbon-step approver">
@@ -420,7 +424,6 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
             <label>Reporting Manager</label>
             {/* <input value={request?.ReportingManagerId || ""} readOnly /> */}
             <input value={request?.ReportingManager?.Title || ""} readOnly />
-
           </div>
 
           <div>
@@ -509,7 +512,9 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
                     <input
                       value={
                         item.ProbableDate
-                          ? new Date(item.ProbableDate).toLocaleDateString("en-IN")
+                          ? new Date(item.ProbableDate).toLocaleDateString(
+                              "en-IN",
+                            )
                           : ""
                       }
                       readOnly
@@ -524,9 +529,23 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
           </tbody>
         </table>
 
-        <div className="attach">
-          Attach Supporting Documents &nbsp;&nbsp;
-          <a>View</a>
+        <div className="authorized">
+          Attach Supporting Documents
+          {uploadedFiles.length === 0 ? (
+            <span>No attachments</span>
+          ) : (
+            uploadedFiles.map((file) => (
+              <div key={file.Id}>
+                <a
+                  href={`${file.FileRef}?web=1`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {file.FileLeafRef}
+                </a>
+              </div>
+            ))
+          )}
         </div>
         <br></br>
 
@@ -566,20 +585,29 @@ const ApproverForm: React.FC<IGatepassProps> = (props) => {
           <div>
             <label>Approver Remarks</label>
 
-            <textarea />
+            <textarea
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
           </div>
         </div>
 
         <div className="buttons">
-          <button className="submit" onClick={handleApprove} disabled={isSaving}>Approve</button>
+          <button
+            className="submit"
+            onClick={handleApprove}
+            disabled={isSaving}
+          >
+            Approve
+          </button>
 
           <button
             className="draft"
-            onClick={handleSendBack} disabled={isSaving}
+            onClick={handleSendBack}
+            disabled={isSaving}
           >
             Send Back
           </button>
-
           <button className="reject" onClick={handleReject} disabled={isSaving}>
             Reject
           </button>
